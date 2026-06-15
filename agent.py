@@ -30,7 +30,9 @@ USE_MOCK = os.getenv("USE_MOCK", "0") == "1"
 MAX_STEPS = 5
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant that can call tools. "
+    "You are a weather and notes assistant. You can only help with two things: "
+    "checking the weather for a city, and saving notes. "
+    "If the user asks about anything else, refuse politely and explain you only handle weather and notes. "
     "Use a tool when it helps answer the user. "
     "When you have enough information, give a short, direct final answer."
 )
@@ -44,6 +46,14 @@ def make_client():
         return (
             OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1"),
             os.getenv("XAI_MODEL", "grok-4.3"),
+        )
+    if PROVIDER == "groq":
+        return (
+            OpenAI(
+                api_key=os.getenv("GROQ_API_KEY"),
+                base_url="https://api.groq.com/openai/v1",
+            ),
+            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         )
     if PROVIDER == "openai":
         return OpenAI(), os.getenv("OPENAI_MODEL", "gpt-4o")

@@ -194,7 +194,21 @@ These go deeper, not just further:
 
 ## What I built
 
-_(Fill this in at Step 4.)_
+This is a minimal AI agent: a language model running in a loop that can call Python tools, read their results, and keep reasoning until it has a final answer. The model never runs tools itself — it decides when to ask for one and what arguments to pass, and the loop in `agent.py` does the actual execution.
+
+**Tools**
+
+Two tools live in `tools.py`. Each has a Python function (what runs) and a JSON schema (what the model reads to decide when to use it — the function is invisible to it):
+
+- `get_weather(city)` — returns current weather for a city. Currently returns a hardcoded placeholder; the schema description tells the model to use it whenever the user asks about weather.
+- `save_note(text)` — appends a timestamped line to `notes.txt`. The schema description is deliberately specific: use it only when the user explicitly asks to save, log, record, or write something to their notes, and the text should be a concise, self-contained sentence.
+
+**Guardrails**
+
+Two guardrails, intentionally placed in different layers:
+
+- **System prompt** (`agent.py`): the agent is scoped to weather and notes only. If you ask it to write code, explain a concept, or do anything outside that scope, it refuses before touching any tool. This is a behavioral guardrail — it shapes what the model *wants* to do. It's cheap (no tool round-trips) but soft: a persuasive enough prompt could work around it.
+- **Hard character limit** (`tools.py`, inside `save_note`): notes longer than 500 characters return an error string instead of writing to disk. The model sees the error as a tool result and self-corrects by trimming and retrying. This is a structural guardrail — it doesn't matter what the model wants, the Python function enforces it unconditionally. Hard limits belong in code, not in prompts, because code can't be argued with.
 
 ---
 

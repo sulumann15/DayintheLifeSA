@@ -13,6 +13,18 @@ def get_weather(city: str) -> str:
     return f"The weather in {city} is 68F and sunny (this is a hardcoded placeholder)."
 
 
+def save_note(text: str) -> str:
+    """Append a timestamped line to notes.txt."""
+    if len(text) > 500:
+        return f"Error: note is {len(text)} characters, exceeds the 500-character limit. Shorten it and try again."
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    line = f"[{timestamp}] {text}\n"
+    with open("notes.txt", "a") as f:
+        f.write(line)
+    return f"Saved: {line.strip()}"
+
+
 # ---- Tool schemas (what the model sees) -------------------------------------
 # This is the "menu" the model picks from. The description is prompt engineering:
 # write it like you're explaining the tool to a new teammate.
@@ -29,11 +41,27 @@ TOOL_SCHEMAS = [
             "required": ["city"],
         },
     },
+    {
+        "name": "save_note",
+        "description": (
+            "Append a timestamped note to the user's notes.txt file. "
+            "Use this when the user explicitly asks to save, log, record, or write something to their notes. "
+            "The text argument should be a concise, self-contained sentence — not a full conversation, just the fact worth saving."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The note text to save, e.g. 'Boston weather: 68F and sunny.'"}
+            },
+            "required": ["text"],
+        },
+    },
 ]
 
 # Maps a tool name to the function that runs it.
 TOOL_FUNCTIONS = {
     "get_weather": get_weather,
+    "save_note": save_note,
 }
 
 
