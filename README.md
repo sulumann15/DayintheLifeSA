@@ -2,17 +2,15 @@
 
 You just sat through the "Day in the Life of a Solutions Architect" session. This repo is what comes next.
 
-You're going to build an actual AI agent: a program that reasons, picks tools, calls them, reads the results, and keeps going until it has an answer. Not a wrapper around a chat API. The real thing. This same pattern shows up in basically every AI product being shipped right now, and it's also what you'll need for your capstone. The scale will be different. The concepts are the same.
+You're going to build an actual AI agent: a program that reasons, picks tools, calls them, reads the results, and keeps going until it has an answer. Not a wrapper around a chat API. The real thing. This same pattern shows up in basically every AI product being shipped right now, and it's what you'll need for your capstone.
 
-By the end (about 30 minutes), you'll have:
-- A working agent loop you can read and explain
-- Two tools the model can call and chain together
-- A guardrail that keeps the agent in scope
-- Code committed to a repo you own
+By the end (about 30 minutes), you'll have built something you can explain from first principles. Not just run -- explain.
 
 ---
 
-## What you're actually building
+## Before you touch any code: build the mental model
+
+Read this. It takes 2 minutes and everything else depends on it.
 
 Most people assume AI is a black box. It isn't. Under every "agent" is a loop:
 
@@ -28,38 +26,36 @@ user message
   final answer
 ```
 
-Here's the part that surprises people: the model doesn't run your tools. You do. The model decides *when* to ask for a tool and *what arguments* to pass. Your code intercepts that, runs the actual Python function, and feeds the result back. Once you see that happen once, the whole space of "AI agents" gets a lot less mysterious.
+Here's the part that surprises people: **the model doesn't run your tools. You do.** The model decides *when* to ask for a tool and *what arguments* to pass. Your code intercepts that request, runs the actual Python function, and feeds the result back.
 
-What you're building today:
+Two files make this work:
 - `agent.py` -- the loop. Sends messages to the model, checks if it wants a tool, runs it, loops back.
 - `tools.py` -- the tool functions. Plain Python. The model never sees this code, only the description you write for it.
 
+Before you go further, answer this in your head:
+
+> If you gave the model a broken tool (one that always crashes), what would happen to the agent? Would it know the tool failed? How?
+
+Hold that question. You'll be able to answer it concretely by the end of Step 2.
+
 ---
 
-## Before you start: install Claude Code
+## Setup
 
-If you haven't already, install Claude Code and log in:
+**Install Claude Code** (if you haven't already):
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude login
 ```
 
-That's what you'll use to build the agent. All the exercise prompts are designed for Claude Code, not a terminal.
+**Get a Grok API key**
 
----
+Go to [console.x.ai](https://console.x.ai), sign in, click "API Keys" in the left sidebar, then "Create API Key". Copy it immediately -- it won't be shown again after you close the modal.
 
-## Setup
+No key yet? Add `USE_MOCK=1` to your `.env` after setup. The agent runs with a fake model. Real responses won't work but the loop does, and the architecture lesson is identical.
 
-You need Python 3.10+ and an API key. We're using Grok (xAI) because it's free and takes about 2 minutes to get a key.
-
-**Step 1: Get your API key**
-
-Go to [console.x.ai](https://console.x.ai) and sign in. In the left sidebar, click "API Keys", then "Create API Key". Copy the key that appears -- you won't be able to see it again after you close that modal.
-
-No key right now? That's fine. You can use mock mode (explained below) and swap in a real key later.
-
-**Step 2: Clone and install**
+**Clone and install**
 
 ```bash
 git clone https://github.com/omar2000751/DayintheLifeSA.git agent-starter
@@ -71,96 +67,153 @@ source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-You should see `Successfully installed openai` and `python-dotenv` at the end. If you see errors instead, make sure you're running Python 3.10 or higher: `python --version`.
+You should see `Successfully installed openai` and `python-dotenv` near the end. If you see errors, check your Python version: `python --version` (needs 3.10+).
 
-**Step 3: Add your key**
+**Add your key**
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` in any editor (VS Code: `code .env`, nano: `nano .env`) and paste your API key on the `XAI_API_KEY=` line. Save the file.
+Open `.env` (VS Code: `code .env`, nano: `nano .env`) and paste your key into `XAI_API_KEY=`. Save the file.
 
-If you're using mock mode instead, open `.env` and change `USE_MOCK=0` to `USE_MOCK=1`. You'll get fake responses but the agent loop still runs.
-
-**Step 4: Open Claude Code and verify**
+**Open Claude Code**
 
 ```bash
 claude .
 ```
 
-Once Claude Code opens, paste this in:
-
-> *"Look at agent.py and tell me what it does, then test that my setup is working by asking the agent what I should pack for Boston today. Show me the full output including any tool calls."*
-
-You're looking for a line that says `-> calling tool: get_weather(...)` before the final answer. If you see that, the loop is working and you're ready for the exercise.
-
-Using OpenAI instead of Grok? Set `OPENAI_API_KEY` and change `PROVIDER=openai` in `.env`. The code is identical either way.
+You'll use Claude Code for the whole exercise. Leave this terminal open.
 
 ---
 
-## The exercise
+## Step 1 -- Read before you run (8 min)
 
-You'll use Claude Code to extend this agent rather than write everything from scratch. That's intentional -- the skill here is knowing what to ask for, not grinding out boilerplate. Each step below has a prompt you can paste directly into Claude Code.
+### Understand
 
----
+Open `agent.py` and read it. Don't run anything yet. Read the `run_agent` function top to bottom.
 
-### Step 1 -- Understand the loop (8 min)
+Ask yourself:
+- Where does the loop start?
+- What is the `if not msg.tool_calls` check doing?
+- What gets added to `messages` each time a tool runs?
 
-Before you change anything, make sure you understand what's running.
+Then open `tools.py`. Notice that `get_weather` is completely fake -- it returns a hardcoded string. The model doesn't know that.
 
-> Paste into Claude Code:
-> *"Walk me through how the agent loop in agent.py works, step by step. What happens when the model wants to call a tool? What happens when it's ready to give a final answer? Then run the agent with a test question and point out exactly where in the output the tool call happens."*
+### Predict
 
-Look for `-> calling tool: get_weather({'city': 'Boston'})` before the final answer. That line is printed by your code, at the moment it intercepts the model's tool request and runs the Python function. That's the loop in action.
+Before you run anything, write down (or just think through) your answer to this:
 
----
+> When you ask "what should I pack for Boston today?", the model will call `get_weather`. It'll get back a fake result that says "68F and sunny." What will the model do with that? Will it know the data is fake? Why or why not?
 
-### Step 2 -- Add a tool that writes (8 min)
+### Build
 
-Right now the agent can only read (fake weather data). Give it something to write to.
+Paste this into Claude Code:
 
-> Paste into Claude Code:
-> *"Add a second tool called save_note that takes a text argument and appends a timestamped line to notes.txt. Wire it up so the agent knows about it. Then ask the agent to check the weather in Boston and save a one-line summary to my notes. Show me what ends up in notes.txt."*
+> *"Read agent.py and explain how the agent loop works -- specifically what happens at each iteration when the model wants to call a tool vs. when it gives a final answer. Then run the agent with 'what should I pack for Boston today?' and show me the full output."*
 
-The agent should call `get_weather` first, then `save_note`. Two tools, chained in the right order automatically. You didn't program that order -- the model figured it out from the descriptions you gave each tool.
+### Reflect
 
----
+After you see the output, answer this before moving on:
 
-### Step 3 -- Add guardrails (7 min)
-
-An agent without guardrails will eventually do something you didn't want. There are two types, and they live in different places for a reason.
-
-> Paste into Claude Code:
-> *"Add two guardrails: first, update the system prompt so the agent politely refuses any request that isn't about weather or notes. Second, make save_note reject any text longer than 500 characters with an error message. After both are done, explain to me why one lives in the prompt and the other lives in code."*
-
-Behavioral rules like "stay on topic" belong in the prompt because they're soft and contextual -- the model can apply judgment. Hard limits like "never store more than 500 chars" belong in code because the model shouldn't be able to reason its way around them.
+> The model called `get_weather` with `{'city': 'Boston'}`. You didn't tell it to use that exact city name -- you said "Boston" in your question. How did it know to pass `'Boston'` as the argument? Where does that decision happen?
 
 ---
 
-### Step 4 -- Ship it (5 min)
+## Step 2 -- Add a tool that writes (8 min)
 
-First, make sure git knows who you are (skip this if you've used git on this machine before):
+### Understand
+
+Right now the agent can only read (fake weather data). You're going to give it a way to write -- a `save_note` tool that appends to a file. But before you build it, think about what the agent needs to know about it.
+
+Open `tools.py` and look at how `get_weather` is defined. There are two parts: the Python function, and the schema in `TOOL_SCHEMAS`. The function is what actually runs. The schema is what the model reads to decide when and how to use it.
+
+### Predict
+
+> If you write a great Python function for `save_note` but write a vague schema description like "saves stuff", what do you think will happen when you ask the agent to save a weather summary?
+
+### Build
+
+Paste this into Claude Code -- but read it first and understand what you're asking for:
+
+> *"Add a tool called save_note that takes a text argument and appends a timestamped line to notes.txt. Make sure the schema description is specific enough that the model knows exactly when to use it. Then ask the agent: 'Check the weather in Boston and save a one-line summary to my notes.' Show me what ends up in notes.txt."*
+
+### Reflect
+
+The agent called `get_weather` before `save_note`. You never programmed that order.
+
+> How did it know to do that? What would have happened if it called `save_note` first?
+
+Now go back to the question from Step 1: if `save_note` threw an exception, would the agent know? Look at the `run_tool` function in `tools.py` and trace what actually happens when a tool fails.
+
+---
+
+## Step 3 -- Add guardrails (7 min)
+
+### Understand
+
+You now have an agent that can read weather and write notes. Ask it something completely off-topic -- something like "write me a poem" or "what's the capital of France." Try it.
+
+> What happened? Did it refuse? Did it try to help anyway? What does that tell you about the current system prompt?
+
+### Predict
+
+You're going to add two guardrails:
+1. The agent should refuse anything not related to weather or notes
+2. `save_note` should hard-reject text longer than 500 characters
+
+> Before you implement them: which one should live in the system prompt and which should live in Python code? Why can't both live in the prompt? What's the risk of putting the 500-character limit in the prompt instead of the code?
+
+### Build
+
+Paste this into Claude Code:
+
+> *"Add two guardrails: update the system prompt so the agent refuses requests outside of weather and notes, and add a hard character limit of 500 to save_note in the Python function -- it should return an error string if the limit is exceeded. After both are done, test both guardrails and show me the output for each."*
+
+### Reflect
+
+> If a clever user crafted a long message that gradually convinced the model the character limit didn't apply in this special case -- which guardrail would hold? Which would break? What does that tell you about where to put hard limits?
+
+---
+
+## Step 4 -- Ship it (5 min)
+
+Set up git if you haven't before:
 
 ```bash
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
 
-Then paste into Claude Code:
+Paste this into Claude Code:
 
-> *"Fill in the 'What I built' section of the README with 3-4 sentences: what this agent does, what tools it has, and what guardrails are in place. Then stage all the changed files and commit with a descriptive message."*
+> *"Fill in the 'What I built' section of the README. Write it as if you're explaining this agent to a new teammate who's never seen it -- what it does, what tools it has, where the guardrails live and why. Then commit all changes with a descriptive message."*
+
+Before you commit, read what Claude Code wrote. If it doesn't match what you actually built, push back and correct it. You own this.
+
+---
+
+## Final check
+
+You should now be able to answer all of these without looking at the code:
+
+1. What's the difference between a tool schema and a tool function? Who sees each one?
+2. Why does the agent loop keep going after a tool call instead of stopping?
+3. You want to add a guardrail that prevents the agent from saving notes with profanity. Where does that live -- prompt or code? Why?
+4. A teammate says "the AI is calling our database." What's actually happening?
+
+If any of these are fuzzy, go back to the step that covers it. These are the exact concepts that will come up in your capstone review.
 
 ---
 
 ## Stretch goals
 
-Done early? Pick one:
+Done early? These go deeper, not just further:
 
-- **Real weather data.** Replace the hardcoded `get_weather` with a live call to [wttr.in](https://wttr.in) -- no key needed (`curl wttr.in/Boston?format=3` to see the format).
-- **MCP server.** Run `claude mcp add fetch -- uvx mcp-server-fetch` and ask the agent to read a webpage. You just gave it a tool you didn't write.
-- **Your own tool.** Dice roller, unit converter, file reader -- anything. Add the function and tell the agent what it does. Ask it to use it.
-- **Claude Code skill.** The `.claude/skills/` folder is set up. Flesh out the research-agent skill so it runs as a slash command.
+- **Break it intentionally.** Delete the description from `get_weather`'s schema (leave the function). Ask the agent a weather question. What happens and why? Restore it after.
+- **Real weather data.** Replace the hardcoded `get_weather` with a live call to [wttr.in](https://wttr.in) (no key needed: `curl wttr.in/Boston?format=3`). Now the fake data problem goes away.
+- **MCP server.** Run `claude mcp add fetch -- uvx mcp-server-fetch` then ask the agent to summarize a webpage. You just gave it a tool you didn't write.
+- **Write your own tool from scratch.** No hints. Pick something useful, write the function, write the schema, ask the agent to use it.
 
 ---
 
